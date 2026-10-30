@@ -820,7 +820,8 @@ class Trainer:
                 checkpoint_path.replace(".tar", f"_iter{self.iters}.tar"),
             )
 
-        if self.clearml is not None:
+        register_iters = self.cfg.logging.get("clearml_checkpoint_iters")
+        if self.clearml is not None and (register_iters is None or self.iters in register_iters):
             # rank 0 also saves, so the (logical) iteration checkpoint exists now
             self.clearml.register_checkpoint(
                 iter_checkpoint_path,

@@ -51,11 +51,15 @@ if len(COOLDOWN_TO_ITERS) != len(P4_CAMPAIGN):
     raise ValueError("COOLDOWN_TO_ITERS and P4_CAMPAIGN must have equal lengths")
 
 
-def cooldown_from_checkpoint_iter(cooldown_to_iter: int) -> int:
+def cooldown_from_checkpoint_iter(
+    cooldown_to_iter: int,
+    cooldown_fraction: float = COOLDOWN_FRACTION,
+    checkpoint_step: int = CHECKPOINT_STEP,
+) -> int:
     """Return the latest saved checkpoint strictly below 95% of the target."""
-    limit = (1.0 - COOLDOWN_FRACTION) * cooldown_to_iter
-    checkpoint_index = math.ceil(limit / CHECKPOINT_STEP) - 1
-    return 10 if checkpoint_index < 1 else checkpoint_index * CHECKPOINT_STEP
+    limit = (1.0 - cooldown_fraction) * cooldown_to_iter
+    checkpoint_index = math.ceil(limit / checkpoint_step) - 1
+    return 10 if checkpoint_index < 1 else checkpoint_index * checkpoint_step
 
 
 def build_plan(fraction: str) -> list[dict]:

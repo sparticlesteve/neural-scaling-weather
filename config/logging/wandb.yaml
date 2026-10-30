@@ -1,6 +1,7 @@
 # Weights & Biases logging
 log_to_wandb: true
 log_to_clearml: true # report to ClearML when running inside a ClearML task
+clearml_checkpoint_iters: null # iterations whose checkpoints become ClearML models; null for all
 log_to_screen: true
 entity: 'scaling-transformers'
 project: 'era5'

@@ -140,11 +140,12 @@ def build_train_params(
     max_iterations: int,
     log_every: int = CHECKPOINT_STEP,
     train_start_year: int = TRAIN_START_YEAR,
+    img_size=(720, 1440),
 ) -> dict:
     config = parse_scaling_tag(base_tag)
     patch_size = config["patch_size"]
     embed_dim = config["embed_dim"]
-    window_size = get_window_size(patch_size, sp1, sp2)
+    window_size = get_window_size(patch_size, sp1, sp2, img_size=img_size)
     return {
         "data.loader": "dali",
         "data.train_start_year": train_start_year,
