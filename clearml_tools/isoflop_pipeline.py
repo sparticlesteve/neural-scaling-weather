@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from types import SimpleNamespace
 
 from clearml import PipelineController
@@ -185,7 +186,9 @@ def build_pipeline(plan, args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--name", default="isoflop-campaign", help="pipeline name")
-    parser.add_argument("--run-name", default="isoflop-test", help="experiment group (cfg.run_name)")
+    parser.add_argument("--run-name", default=time.strftime("isoflop-%Y%m%d-%H%M"),
+                        help="experiment group (cfg.run_name); also the output directory, so keep it unique "
+                             "(default: timestamped)")
     parser.add_argument("--project", default=common.PROJECT)
     parser.add_argument("--queue", default=common.QUEUE)
     parser.add_argument("--models", nargs="+", default=TEST_MODELS, help="tags like p4-e128-d4-lr1em3")
