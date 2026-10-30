@@ -8,7 +8,8 @@ Same structure as pretrain_campaign.py + cooldown_campaign.py, as one DAG:
 
 Each cooldown waits only for its own model's pretrain. Cooldown lengths are set
 so that each run spends one of the FLOP budgets. The controller runs here (it
-blocks until the pipeline ends); the steps run on the cluster queue.
+blocks until the pipeline ends, so run it in the background to keep working);
+the steps run on the cluster queue. It prints the pipeline ID at the start.
 
 The default is a minimal functional test on the synthetic 1-degree data:
 
@@ -206,6 +207,8 @@ def main():
         return
 
     pipe = build_pipeline(plan, args)
+    # The controller blocks below until the pipeline ends; print the ID first so it can be watched
+    print(f"Pipeline ID: {pipe.id}", flush=True)
     pipe.start_locally(run_pipeline_steps_locally=False)
     print("Pipeline finished")
 
