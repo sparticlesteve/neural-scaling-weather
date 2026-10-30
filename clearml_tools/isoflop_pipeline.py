@@ -140,13 +140,15 @@ def build_pipeline(plan, args):
     pipe.add_tags(list(common.TAGS))
     pipe.set_default_execution_queue(args.queue)
 
-    # Template tasks the steps clone; the steps override all run-specific settings
+    # Template tasks the steps clone; the steps override all run-specific settings. They live in a
+    # subproject and carry no extra tags, since steps inherit both (steps go to target_project).
+    templates_project = f"{args.project}/templates"
     template = common.create_train_task(
-        f"{args.name} train template", common.SYNTHETIC_DATA_OVERRIDES, project=args.project, tags=["template"]
+        f"{args.name} train template", common.SYNTHETIC_DATA_OVERRIDES, project=templates_project
     )
     analysis = common.create_script_task(
-        f"{args.name} analysis template", "clearml_tools/isoflop_analysis.py", {}, project=args.project,
-        tags=["template"], task_type="qc", add_task_init_call=False,
+        f"{args.name} analysis template", "clearml_tools/isoflop_analysis.py", {}, project=templates_project,
+        task_type="qc", add_task_init_call=False,
     )
 
     data_overrides = {**common.SYNTHETIC_DATA_OVERRIDES, "data.limit_nsamples": args.limit_nsamples}
