@@ -59,6 +59,17 @@ def parse_overrides(args):
     return overrides
 
 
+def micro_batch_without_accum(batch_size, nodes, tp=1, sp1=1, sp2=1, gpus_per_node=4):
+    """Micro-batch size that makes gradient accumulation 1 (one micro-batch per DP rank per step).
+
+    Grad accum > 1 currently misaligns DALI and trainer epochs (alternating short epochs).
+    """
+    dp = nodes * gpus_per_node // (int(tp) * int(sp1) * int(sp2))
+    if batch_size % dp:
+        raise ValueError(f"batch size {batch_size} is not divisible by DP size {dp}")
+    return batch_size // dp
+
+
 def set_slurm_resources(task, nodes, ntasks_per_node=4, cpus_per_task=32):
     """User properties read by the Slurm template"""
     task.set_user_properties(num_nodes=nodes, ntasks_per_node=ntasks_per_node, cpus_per_task=cpus_per_task)

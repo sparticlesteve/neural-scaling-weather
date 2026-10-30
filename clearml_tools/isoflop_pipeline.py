@@ -70,6 +70,8 @@ def build_plan(models, budgets, run_name, checkpoint_step, cooldown_fraction, ba
         params["data.batch_size"] = batch_size
         params["model.num_heads"] = max(1, params["model.embed_dim"] // HEAD_DIM)
         per_iter = flops_per_iteration(params, batch_size)
+        nodes = BASE_NODES // 4  # one node: these models need no model parallelism
+        params["parallelism.micro_batch_size"] = common.micro_batch_without_accum(batch_size, nodes)
 
         cooldowns = []
         for budget in budgets:
@@ -101,7 +103,7 @@ def build_plan(models, budgets, run_name, checkpoint_step, cooldown_fraction, ba
         branch_iters = sorted({c["from_iter"] for c in cooldowns})
         plan.append({
             "run_tag": base_tag,
-            "nodes": BASE_NODES // 4,  # one node: these models need no model parallelism
+            "nodes": nodes,
             "flops_per_iter": per_iter,
             "params": {
                 **params,

@@ -50,6 +50,11 @@ def main():
     overrides = {} if args.real_data else {**common.SYNTHETIC_DATA_OVERRIDES, **SMALL_MODEL}
     overrides.update({"run_name": args.run_name, "run_tag": args.name})
     overrides.update(common.parse_overrides(args.overrides))
+    if "parallelism.micro_batch_size" not in overrides and "data.batch_size" in overrides:
+        overrides["parallelism.micro_batch_size"] = common.micro_batch_without_accum(
+            int(overrides["data.batch_size"]), args.nodes,
+            **{k: overrides.get(f"parallelism.{k}", 1) for k in ("tp", "sp1", "sp2")},
+        )
 
     task = common.create_train_task(args.name, overrides, nodes=args.nodes, project=args.project, tags=args.tags)
     if args.draft:
