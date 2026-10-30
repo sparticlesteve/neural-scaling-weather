@@ -7,9 +7,10 @@ Same structure as pretrain_campaign.py + cooldown_campaign.py, as one DAG:
     all cooldowns -> isoflop-analysis
 
 Each cooldown waits only for its own model's pretrain. Cooldown lengths are set
-so that each run spends one of the FLOP budgets. The controller runs here (it
-blocks until the pipeline ends, so run it in the background to keep working);
-the steps run on the cluster queue. It prints the pipeline ID at the start.
+so that each run spends one of the FLOP budgets. The steps run on the cluster
+queue. The controller runs in this process (start_locally), so the script
+blocks until the pipeline ends; run it in the background to keep working.
+It prints the pipeline ID first, for watching the run.
 
 The default is a minimal functional test on the synthetic 1-degree data:
 
