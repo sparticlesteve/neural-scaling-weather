@@ -2,5 +2,5 @@
 # here we specify the hydra otputs directory to match the experiment directory
 # with this setup hydra will actually create the experiment directory
 run:
-  dir: "/expts/${run_name}/${run_tag}"
-output_subdir: "/expts/${run_name}/${run_tag}/.hydra"
+  dir: "${exp_root}/${run_name}/${run_tag}"
+output_subdir: "${exp_root}/${run_name}/${run_tag}/.hydra"

@@ -61,7 +61,7 @@ class ResumeSampler(Sampler):
 def get_dataset(cfg, mode="train"):
     if cfg.data.loader == "pytorch":
         # use pytorch dataloader
-        if cfg.data.name in ["latlon_025deg_hdf5", "latlon_025deg_hdf5_1h"]:
+        if cfg.data.name.startswith("latlon_"):
             dataset = Era5HDF5Dataset.instantiate_from_cfg(cfg, mode)
         else:
             raise ValueError(f"Dataset {cfg.data.name} not found")

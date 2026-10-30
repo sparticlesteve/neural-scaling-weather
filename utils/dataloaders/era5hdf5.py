@@ -28,6 +28,7 @@ class Era5HDF5Dataset(Dataset):
         """Class method to instantiate the dataset in a given mode (train/valid/test) from a given hydra config"""
         return cls(
             name=cfg.data.name,
+            root=cfg.data.root,
             tag=cfg.data.tag,
             mode=mode,
             dt_scale=cfg.data.dt_scale,
@@ -46,6 +47,7 @@ class Era5HDF5Dataset(Dataset):
     def __init__(
         self,
         name: str,
+        root: str,
         tag: str,
         mode: str,
         dt_scale: int = 1,
@@ -93,7 +95,7 @@ class Era5HDF5Dataset(Dataset):
                 whether to read the local spatial data (True) or the full global data (False)
         """
         super().__init__()
-        self.location = "/data/" + name
+        self.location = os.path.join(root, name)
         self.tag = tag
         self.mode = mode
         self.dt_scale = dt_scale

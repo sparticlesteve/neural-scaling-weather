@@ -34,6 +34,7 @@ from distributed.mappings import init_ddp_model_and_reduction_hooks
 from distributed.helpers import init_params_for_shared_weights
 from models.helpers import get_model
 from utils.profiler_utils import init_profiler, profile_range, profile
+from utils.clearml_utils import get_clearml_reporter
 
 
 def set_seed(cfg, world_size):
@@ -58,7 +59,7 @@ class Trainer:
 
     def __init__(self, cfg):
         """init vars for distributed training (ddp) and logging"""
-        self.exp_dir = os.path.join("/expts", cfg.run_name, cfg.run_tag)
+        self.exp_dir = os.path.join(cfg.exp_root, cfg.run_name, cfg.run_tag)
         self.run_name, self.run_tag = cfg.run_name, cfg.run_tag
         self.auto_resume = not cfg.disable_auto_resume
 
@@ -83,6 +84,7 @@ class Trainer:
 
         self.log_to_screen = cfg.logging.log_to_screen and self.world_rank == 0
         self.log_to_wandb = cfg.logging.log_to_wandb and self.world_rank == 0
+        self.clearml = get_clearml_reporter(cfg, self.world_rank)
         self.cfg = cfg
 
         # Set gradient accumulation steps
@@ -158,6 +160,8 @@ class Trainer:
         elif self.cfg.train.branch_from is not None:
             # branching from a saved checkpoint (different name and tag) for cooldown etc.
             logging.info("Branching from checkpoint %s" % self.cfg.train.branch_from)
+            if self.clearml is not None:
+                self.clearml.connect_input_checkpoint(self.cfg.train.branch_from)
             # fresh scheduler state for cooldown etc.
             self.restore_checkpoint(
                 checkpoint_path=self.cfg.train.branch_from,
@@ -323,6 +327,7 @@ class Trainer:
         )
 
         n_params = count_parameters(self.model)
+        self.n_params = n_params
         if self.log_to_screen:
             logging.info(self.model)
             logging.info("number of model parameters (M): {}".format(n_params))
@@ -403,6 +408,17 @@ class Trainer:
 
         if self.log_to_wandb:
             wandb.finish()
+
+        if self.clearml is not None:
+            self.clearml.report_summary(
+                {
+                    "final_val_loss": self.logs["val_loss"],
+                    "best_val_loss": self.best_loss,
+                    "iterations": self.iters,
+                    "flops": self.flops_consumed * 1e12,
+                    "params_M": self.n_params,
+                }
+            )
 
         app_time = time.time() - app_time
         if self.log_to_screen:
@@ -501,14 +517,16 @@ class Trainer:
                     op=torch.distributed.ReduceOp.AVG,
                     group=comm.get_group("dp"),
                 )
-        self.logs["train_loss"] = train_loss.detach().cpu().numpy()
-        self.logs["grad"] = grad.detach().cpu().numpy()
+        self.logs["train_loss"] = train_loss.item()
+        self.logs["grad"] = grad.item()
         if self.log_to_wandb:
             wandb.log(self.logs, step=self.iters, commit=True)
 
         # write logs to file as well
         if comm.get_world_rank() == 0:
             self.write_logs()
+        if self.clearml is not None:
+            self.clearml.report_scalars(self.logs, self.iters)
 
         # save checkpoint (if best iter additionally save the best iter too)
         if self.cfg.train.save_checkpoint:
@@ -717,12 +735,12 @@ class Trainer:
                     group=comm.get_group("dp"),
                 )
 
-        self.logs["val_loss"] = valid_loss.detach().cpu().numpy()
+        self.logs["val_loss"] = valid_loss.item()
         # track specific variables
         for var in self.cfg.data.track_channels:
             idx = self.val_dataset.era5_channels.index(var)
             self.logs.update(
-                {f"val_rmse_{var}": valid_weighted_rmse[idx].detach().cpu().numpy()}
+                {f"val_rmse_{var}": valid_weighted_rmse[idx].item()}
             )
 
         self.sync_devices()
@@ -765,6 +783,7 @@ class Trainer:
         return checkpoint_path
 
     def save_checkpoint(self, checkpoint_path, is_best=False, save_epoch=None):
+        iter_checkpoint_path = checkpoint_path.replace(".tar", f"_iter{self.iters}.tar")
         checkpoint_path = self.modify_checkpoint_path(checkpoint_path)
         checkpoint = {
             "iters": self.iters,
@@ -799,6 +818,14 @@ class Trainer:
             torch.save(
                 checkpoint,
                 checkpoint_path.replace(".tar", f"_iter{self.iters}.tar"),
+            )
+
+        if self.clearml is not None:
+            # rank 0 also saves, so the (logical) iteration checkpoint exists now
+            self.clearml.register_checkpoint(
+                iter_checkpoint_path,
+                self.iters,
+                metadata={"tp": comm.get_size("tp"), "sp1": comm.get_size("sp1"), "sp2": comm.get_size("sp2")},
             )
 
     def restore_checkpoint(

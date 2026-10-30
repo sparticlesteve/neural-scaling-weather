@@ -12,6 +12,7 @@ defaults:
  - _self_
  - debug: null
  
+exp_root: '/expts' # experiment dirs go in ${exp_root}/${run_name}/${run_tag}
 run_name: 'default' # name to use for experiment dir + slurm job + wandb
 run_tag: '00' # tag to identify a particular run
 sweep_id: null # set to null for standard training, otherwise provide wandb sweep id

@@ -59,6 +59,7 @@ class TestDaliES(unittest.TestCase):
         held_out = [y for y in years if y != TRAIN_YEAR]
         return Era5HDF5DatasetDALI(
             name="latlon_025deg_hdf5_1h",
+            root="/data",
             tag="v1.0",
             mode="train",
             dt_scale=DT_SCALE,

@@ -145,6 +145,7 @@ class Era5HDF5DatasetDALI:
         """Class method to instantiate the dataset in a given mode (train/valid/test) from a given hydra config"""
         return cls(
             name=cfg.data.name,
+            root=cfg.data.root,
             tag=cfg.data.tag,
             mode=mode,
             dt_scale=cfg.data.dt_scale,
@@ -165,6 +166,7 @@ class Era5HDF5DatasetDALI:
     def __init__(
         self,
         name: str,
+        root: str,
         tag: str,
         mode: str,
         dt_scale: int = 1,
@@ -218,7 +220,7 @@ class Era5HDF5DatasetDALI:
             seed: int
                 random seed for shuffling (must be constant across workers)
         """
-        self.location = "/data/" + name
+        self.location = os.path.join(root, name)
         self.tag = tag
         self.mode = mode
         self.dt_scale = dt_scale

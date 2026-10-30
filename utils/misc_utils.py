@@ -7,7 +7,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import cm
-import torch_harmonics as th
 import torch
 from utils import comm
 
@@ -114,6 +113,8 @@ def compute_power_spectrum(x, sht=None):
     assert len(x.shape) == 4, "Power specturm computation only supports lat-lon grid"
     nlat, nlon = x.shape[-2:]
     if sht is None:
+        import torch_harmonics as th  # only needed for spectra
+
         sht = th.RealSHT(nlat, nlon, grid="equiangular").to(x.device)
     coeff = sht(x.to(torch.float64)) # some th versions show errors in fp32
     coeff = torch.view_as_real(coeff)

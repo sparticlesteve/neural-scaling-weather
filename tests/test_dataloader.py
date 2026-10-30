@@ -56,6 +56,7 @@ class TestDataLoader(unittest.TestCase):
         if dataloader_type == "dali":
             dataset = Era5HDF5DatasetDALI(
                 name="latlon_025deg_hdf5_1h",
+                root="/data",
                 tag="v1.0",
                 mode="train",
                 dt_scale=6,
@@ -83,6 +84,7 @@ class TestDataLoader(unittest.TestCase):
             if file_type == "hdf5":
                 dataset = Era5HDF5Dataset(
                     name="latlon_025deg_hdf5_1h",
+                    root="/data",
                     tag="v1.0",
                     mode="train",
                     dt_scale=6,

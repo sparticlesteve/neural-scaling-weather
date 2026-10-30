@@ -10,7 +10,6 @@ from distributed.mappings import (
     allgather_forward_split_backward,
     split_forward_allgather_backward,
 )
-from torch_harmonics import RealSHT
 import math
 from utils.profiler_utils import profile_range
 
@@ -171,6 +170,9 @@ class AMSELoss(nn.Module):
         self.longitudes = longitudes
         self.sp_shapes = sp_shapes
         self.loss_type = loss_type
+
+        # imported here so training with other losses does not need torch_harmonics
+        from torch_harmonics import RealSHT
 
         self.sht = RealSHT(len(latitudes), len(longitudes), grid="equiangular")
 

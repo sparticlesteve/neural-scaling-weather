@@ -1,5 +1,6 @@
 # Weights & Biases logging
 log_to_wandb: true
+log_to_clearml: true # report to ClearML when running inside a ClearML task
 log_to_screen: true
 entity: 'scaling-transformers'
 project: 'era5'

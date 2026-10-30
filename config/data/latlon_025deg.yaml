@@ -5,6 +5,7 @@
 #   varlist_pl = ['u', 'v', 'z', 't', 'q']
 #   levels = [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 850, 925, 1000]
 
+root: '/data' # directory that holds the dataset folder
 name: 'latlon_025deg_hdf5_1h'
 tag: 'v1.0' # tag to use for a train/val/test split and according stats
 loader: 'dali' # pytorch or dali

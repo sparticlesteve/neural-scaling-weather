@@ -48,7 +48,7 @@ class Inferencer:
         """Initialize variables for inference and scoring."""
         # path vars
         self.cfg = cfg
-        self.exp_dir = os.path.join("/expts", cfg.run_name, cfg.run_tag)
+        self.exp_dir = os.path.join(cfg.exp_root, cfg.run_name, cfg.run_tag)
 
         # init the communicator groups (with model parallel if needed)
         comm.init(cfg)
