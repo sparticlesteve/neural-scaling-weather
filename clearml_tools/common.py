@@ -5,7 +5,12 @@ the script in the container image, and paths under /mscratch are visible
 inside it. Data and experiment dirs default to the dasml scratch there.
 """
 
+import hashlib
+import json
+import re
+
 from clearml import Task
+from clearml.backend_interface.util import get_or_create_project
 
 REPO = "https://github.com/sparticlesteve/neural-scaling-weather.git"
 BRANCH = "clearml-scaling"
@@ -119,6 +124,41 @@ def create_script_task(
     set_slurm_resources(task, nodes=1, ntasks_per_node=1, cpus_per_task=32)
     task.add_tags(list(TAGS) + list(tags))
     return task
+
+
+def templates_project(project=PROJECT):
+    """Hidden sub-project for pipeline step templates (a dot in the name doesn't hide it; the system tag does)"""
+    name = f"{project}/.templates"
+    get_or_create_project(Task._get_default_session(), name, system_tags=["hidden"])
+    return name
+
+
+def get_or_create_template(name, project, create, *args, **kwargs):
+    """Reuse a draft template made with the same settings, else create(name, *args, project=project, **kwargs).
+
+    The settings (arguments plus this module's repo, branch, image, setup and packages) are hashed into the
+    template's comment. A template whose hash differs is archived and replaced. The steps check out the branch
+    head when they run, so code changes alone don't need a new template.
+    """
+    spec = {"create": create.__name__, "args": args, "kwargs": kwargs, "repo": REPO, "branch": BRANCH,
+            "image": IMAGE, "setup": SETUP_SCRIPT, "packages": PACKAGES, "tags": TAGS}
+    comment = "template spec " + hashlib.sha1(json.dumps(spec, sort_keys=True, default=str).encode()).hexdigest()[:12]
+    template = None
+    project_id = Task.get_project_id(project)
+    if project_id:
+        found = Task.get_tasks(
+            task_name=f"^{re.escape(name)}$",
+            task_filter={"project": [project_id], "status": ["created"], "search_hidden": True},
+        )
+        for task in found:
+            if template is None and task.comment == comment:
+                template = task
+            else:
+                task.set_archived(True)
+    if template is None:
+        template = create(name, *args, project=project, **kwargs)
+        template.set_comment(comment)
+    return template
 
 
 def describe(task):
