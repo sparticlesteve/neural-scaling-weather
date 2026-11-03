@@ -877,6 +877,12 @@ class Trainer:
             self.n_mbs = checkpoint["n_mbs"]
             self.n_mbs_in_epoch = checkpoint["n_mbs_in_epoch"]
             self.start_epoch = checkpoint["epoch"]
+            # a checkpoint at the last step of an epoch records the full epoch;
+            # resume at the start of the next one instead of skipping a whole epoch
+            mbs_per_epoch = getattr(self.train_dataset, "num_steps_per_epoch", None)
+            if mbs_per_epoch and self.n_mbs_in_epoch >= mbs_per_epoch:
+                self.start_epoch += 1
+                self.n_mbs_in_epoch = 0
             dataset_ckpt = {
                 "n_mbs_in_epoch": self.n_mbs_in_epoch,
                 "epoch": self.start_epoch,

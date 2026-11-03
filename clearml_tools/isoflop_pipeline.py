@@ -70,7 +70,7 @@ def flops_per_iteration(params: dict, batch_size: int, img_size=IMG_SIZE) -> flo
 
 
 def build_plan(models, budgets, run_name, checkpoint_step, cooldown_fraction, batch_size, train_start_year,
-               warmup_steps, img_size=IMG_SIZE):
+               warmup_steps, img_size=IMG_SIZE, micro_batch_size=None):
     """Pretrain and cooldown runs, with the Hydra overrides for each"""
     plan = []
     for base_tag in models:
@@ -83,7 +83,7 @@ def build_plan(models, budgets, run_name, checkpoint_step, cooldown_fraction, ba
         params["model.num_heads"] = max(1, params["model.embed_dim"] // HEAD_DIM)
         per_iter = flops_per_iteration(params, batch_size, img_size)
         nodes = BASE_NODES // 4  # one node: these models need no model parallelism
-        params["parallelism.micro_batch_size"] = common.micro_batch_without_accum(batch_size, nodes)
+        params["parallelism.micro_batch_size"] = micro_batch_size or common.micro_batch_without_accum(batch_size, nodes)
 
         cooldowns = []
         for budget in budgets:
@@ -214,21 +214,26 @@ def main():
     parser.add_argument("--warmup-steps", type=int, default=10, help="LR warmup (the config default is 500)")
     parser.add_argument("--limit-nsamples", type=int,
                         help="multiple of the batch size (default: 352 on synthetic data, all on real data)")
+    parser.add_argument("--micro-batch-size", type=int,
+                        help="per-GPU micro-batch (default: no accumulation on synthetic data, 2 on real data, "
+                        "which fits e256-d8 on Muller's 40 GB A100s)")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = parser.parse_args()
     if args.real_data:
-        defaults = REAL_MODELS, REAL_BUDGETS, -1, common.REAL_DATA_OVERRIDES, REAL_IMG_SIZE
+        defaults = REAL_MODELS, REAL_BUDGETS, -1, common.REAL_DATA_OVERRIDES, REAL_IMG_SIZE, 2
     else:
-        defaults = TEST_MODELS, TEST_BUDGETS, 352, common.SYNTHETIC_DATA_OVERRIDES, IMG_SIZE
+        defaults = TEST_MODELS, TEST_BUDGETS, 352, common.SYNTHETIC_DATA_OVERRIDES, IMG_SIZE, None
     args.models = args.models or defaults[0]
     args.budgets = args.budgets or defaults[1]
     if args.limit_nsamples is None:
         args.limit_nsamples = defaults[2]
     args.data_overrides = defaults[3]
+    args.micro_batch_size = args.micro_batch_size or defaults[5]
 
     plan = build_plan(
         args.models, args.budgets, args.run_name, args.checkpoint_step,
         args.cooldown_fraction, args.batch_size, args.train_start_year, args.warmup_steps, img_size=defaults[4],
+        micro_batch_size=args.micro_batch_size,
     )
     print_plan(plan)
     if args.dry_run:
