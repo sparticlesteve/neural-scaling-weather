@@ -16,6 +16,8 @@ The default is a minimal functional test on the synthetic 1-degree data:
 
     python clearml_tools/isoflop_pipeline.py --dry-run   # print the plan
     python clearml_tools/isoflop_pipeline.py
+
+--real-data runs a small pilot on the real ERA5 time subset (0.25 degree, 6-hourly).
 """
 
 import argparse
@@ -39,6 +41,11 @@ from utils.flops_utils import FlopsCalculator  # noqa: E402
 TEST_MODELS = ("p4-e64-d2-lr1em3", "p4-e128-d4-lr1em3", "p4-e192-d6-lr1em3")
 TEST_BUDGETS = (3e13, 1e14)
 IMG_SIZE = (180, 360)
+
+# Pilot campaign on the real ERA5 subset (0.25 degree; window sizes use 720 rows, as pretrain_campaign does)
+REAL_MODELS = ("p4-e96-d4-lr1p5em3", "p4-e128-d6-lr1p5em3", "p4-e192-d6-lr1p5em3", "p4-e256-d8-lr1p5em3")
+REAL_BUDGETS = (1e15, 3e15)
+REAL_IMG_SIZE = (720, 1440)
 N_CHANNELS = 71
 N_INVARIANTS = 3
 
@@ -62,17 +69,19 @@ def flops_per_iteration(params: dict, batch_size: int, img_size=IMG_SIZE) -> flo
     return calc.flops() * 1e12 * 3 * batch_size
 
 
-def build_plan(models, budgets, run_name, checkpoint_step, cooldown_fraction, batch_size, train_start_year):
+def build_plan(models, budgets, run_name, checkpoint_step, cooldown_fraction, batch_size, train_start_year,
+               warmup_steps, img_size=IMG_SIZE):
     """Pretrain and cooldown runs, with the Hydra overrides for each"""
     plan = []
     for base_tag in models:
         params = build_train_params(
             base_tag, 1, 1, max_iterations=0, log_every=checkpoint_step,
-            train_start_year=train_start_year, img_size=IMG_SIZE,
+            train_start_year=train_start_year, img_size=img_size,
         )
         params["data.batch_size"] = batch_size
+        params["optimizer.warmup_steps"] = warmup_steps
         params["model.num_heads"] = max(1, params["model.embed_dim"] // HEAD_DIM)
-        per_iter = flops_per_iteration(params, batch_size)
+        per_iter = flops_per_iteration(params, batch_size, img_size)
         nodes = BASE_NODES // 4  # one node: these models need no model parallelism
         params["parallelism.micro_batch_size"] = common.micro_batch_without_accum(batch_size, nodes)
 
@@ -145,14 +154,14 @@ def build_pipeline(plan, args):
     # (steps go to target_project).
     templates_project = common.templates_project(args.project)
     template = common.get_or_create_template(
-        f"{args.name} train template", templates_project, common.create_train_task, common.SYNTHETIC_DATA_OVERRIDES
+        f"{args.name} train template", templates_project, common.create_train_task, {}
     )
     analysis = common.get_or_create_template(
         f"{args.name} analysis template", templates_project, common.create_script_task,
         "clearml_tools/isoflop_analysis.py", {}, task_type="qc", add_task_init_call=False,
     )
 
-    data_overrides = {**common.SYNTHETIC_DATA_OVERRIDES, "data.limit_nsamples": args.limit_nsamples}
+    data_overrides = {**args.data_overrides, "data.limit_nsamples": args.limit_nsamples}
     cooldown_steps = []
     for run in plan:
         pipe.add_step(
@@ -194,19 +203,32 @@ def main():
                              "(default: timestamped)")
     parser.add_argument("--project", default=common.PROJECT)
     parser.add_argument("--queue", default=common.QUEUE)
-    parser.add_argument("--models", nargs="+", default=TEST_MODELS, help="tags like p4-e128-d4-lr1em3")
-    parser.add_argument("--budgets", nargs="+", type=float, default=TEST_BUDGETS, help="FLOP budgets")
+    parser.add_argument("--real-data", action="store_true",
+                        help="use the real ERA5 subset, with the pilot models and budgets as defaults")
+    parser.add_argument("--models", nargs="+", help="tags like p4-e128-d4-lr1em3")
+    parser.add_argument("--budgets", nargs="+", type=float, help="FLOP budgets")
     parser.add_argument("--checkpoint-step", type=int, default=10)
     parser.add_argument("--cooldown-fraction", type=float, default=0.2)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--train-start-year", type=int, default=2016)
-    parser.add_argument("--limit-nsamples", type=int, default=352, help="multiple of the batch size")
+    parser.add_argument("--warmup-steps", type=int, default=10, help="LR warmup (the config default is 500)")
+    parser.add_argument("--limit-nsamples", type=int,
+                        help="multiple of the batch size (default: 352 on synthetic data, all on real data)")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = parser.parse_args()
+    if args.real_data:
+        defaults = REAL_MODELS, REAL_BUDGETS, -1, common.REAL_DATA_OVERRIDES, REAL_IMG_SIZE
+    else:
+        defaults = TEST_MODELS, TEST_BUDGETS, 352, common.SYNTHETIC_DATA_OVERRIDES, IMG_SIZE
+    args.models = args.models or defaults[0]
+    args.budgets = args.budgets or defaults[1]
+    if args.limit_nsamples is None:
+        args.limit_nsamples = defaults[2]
+    args.data_overrides = defaults[3]
 
     plan = build_plan(
         args.models, args.budgets, args.run_name, args.checkpoint_step,
-        args.cooldown_fraction, args.batch_size, args.train_start_year,
+        args.cooldown_fraction, args.batch_size, args.train_start_year, args.warmup_steps, img_size=defaults[4],
     )
     print_plan(plan)
     if args.dry_run:

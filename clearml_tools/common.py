@@ -39,6 +39,20 @@ SYNTHETIC_DATA_OVERRIDES = {
     "logging.log_to_wandb": False,
 }
 
+# Hydra overrides for the real ERA5 time subset (scripts/subset_era5.py): 0.25 degree, 6-hourly,
+# Jan-Apr 2016 for training and 5 days of 2017 for validation
+REAL_DATA = "latlon_025deg_hdf5_6h_subset"
+REAL_DATA_OVERRIDES = {
+    "data.root": DATA_ROOT,
+    "data.name": REAL_DATA,
+    "data.dt_scale": 1,  # the subset is 6-hourly: keeps the 6-hour lead time
+    "data.train_start_year": 2016,
+    "data.valid_years": "[2017]",
+    "data.test_years": "[2017]",
+    "exp_root": EXP_ROOT,
+    "logging.log_to_wandb": False,
+}
+
 # The template exports Slurm's rank variables; the image's NCCL net plugin
 # setting does not apply inside podman-hpc (submit_batch.sh unsets it too).
 SETUP_SCRIPT = """
