@@ -51,7 +51,8 @@ def group_by_budget(runs):
             groups[-1].append(run)
         else:
             groups.append([run])
-    return groups
+    # Within a budget, order by size so the curves connect left to right
+    return [sorted(group, key=lambda r: r["params_M"]) for group in groups]
 
 
 def fit_isoflop(group):
