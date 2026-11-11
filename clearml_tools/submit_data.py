@@ -1,6 +1,6 @@
 """Submit a ClearML task that writes the synthetic test dataset on the cluster.
 
-    python clearml_tools/submit_data.py [--queue muller]
+    python clearml_tools/submit_data.py [--system muller|perlmutter] [--queue QUEUE]
 """
 
 import argparse
@@ -13,9 +13,11 @@ import common
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", default=common.PROJECT)
-    parser.add_argument("--queue", default=common.QUEUE)
-    parser.add_argument("--root", default=common.DATA_ROOT)
+    common.add_system_args(parser)
+    parser.add_argument("--root", help="data root (default: the system's)")
     args = parser.parse_args()
+    common.apply_system_args(args)
+    args.root = args.root or common.DATA_ROOT
 
     task = common.create_script_task(
         "make-synthetic-era5",

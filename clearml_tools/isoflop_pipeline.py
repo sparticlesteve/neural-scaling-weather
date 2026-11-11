@@ -12,6 +12,8 @@ queue. The controller runs in this process (start_locally), so the script
 blocks until the pipeline ends; run it in the background to keep working.
 It prints the pipeline ID first, for watching the run.
 
+--system perlmutter runs it on Perlmutter (see SYSTEMS in common.py).
+
 The default is a minimal functional test on the synthetic 1-degree data:
 
     python clearml_tools/isoflop_pipeline.py --dry-run   # print the plan
@@ -202,7 +204,7 @@ def main():
                         help="experiment group (cfg.run_name); also the output directory, so keep it unique "
                              "(default: timestamped)")
     parser.add_argument("--project", default=common.PROJECT)
-    parser.add_argument("--queue", default=common.QUEUE)
+    common.add_system_args(parser)
     parser.add_argument("--real-data", action="store_true",
                         help="use the real ERA5 subset, with the pilot models and budgets as defaults")
     parser.add_argument("--models", nargs="+", help="tags like p4-e128-d4-lr1em3")
@@ -219,6 +221,7 @@ def main():
                         "which fits e256-d8 on Muller's 40 GB A100s)")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = parser.parse_args()
+    common.apply_system_args(args)
     if args.real_data:
         defaults = REAL_MODELS, REAL_BUDGETS, -1, common.REAL_DATA_OVERRIDES, REAL_IMG_SIZE, 2
     else:

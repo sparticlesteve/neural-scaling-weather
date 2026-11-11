@@ -1,12 +1,18 @@
 """Shared settings and helpers for running this repo's scripts as ClearML tasks.
 
-Tasks run on the Muller Slurm agent ("muller" queue): every Slurm rank runs
-the script in the container image, and paths under /mscratch are visible
-inside it. Data and experiment dirs default to the dasml scratch there.
+Tasks run on a NERSC Slurm agent: every Slurm rank runs the script in the
+container image as dasml. SYSTEMS holds each system's queue, data root and
+experiment root; pick one with --system (scripts call add_system_args and
+apply_system_args) or the SCALING_SYSTEM environment variable. Default: muller.
+
+- muller: data and outputs in dasml's /mscratch.
+- perlmutter: jobs mount all of /pscratch, so data is read from sfarrell's
+  pscratch (world-readable) and outputs go to dasml's pscratch.
 """
 
 import hashlib
 import json
+import os
 import re
 
 from clearml import Task
@@ -16,42 +22,85 @@ REPO = "https://github.com/sparticlesteve/neural-scaling-weather.git"
 BRANCH = "clearml-scaling"
 IMAGE = "docker.io/nersc/pytorch:26.07.01"
 PROJECT = "SC26 demo-dev/Scaling laws"
-QUEUE = "muller"
 TAGS = ["sc26-test", "scaling"]
 
-SCRATCH = "/mscratch/sd/d/dasml/sc26-scaling"
-DATA_ROOT = f"{SCRATCH}/data"
-EXP_ROOT = f"{SCRATCH}/expts"
+SYSTEMS = {
+    "muller": {
+        "queue": "muller",
+        "data_root": "/mscratch/sd/d/dasml/sc26-scaling/data",
+        "exp_root": "/mscratch/sd/d/dasml/sc26-scaling/expts",
+    },
+    "perlmutter": {
+        "queue": "perlmutter",
+        "data_root": "/pscratch/sd/s/sfarrell/sc26-scaling/data",
+        "exp_root": "/pscratch/sd/d/dasml/sc26-scaling/expts",
+    },
+}
+
 SYNTHETIC_DATA = "latlon_1deg_synthetic_6h"
+# Real ERA5 time subset (scripts/subset_era5.py): 0.25 degree, 6-hourly,
+# Jan-Apr 2016 for training and 5 days of 2017 for validation
+REAL_DATA = "latlon_025deg_hdf5_6h_subset"
 
 # Pin clearml: the task code was tested with this version
 PACKAGES = ["clearml==2.0.2"]
 
-# Hydra overrides that point training at the synthetic test data
-SYNTHETIC_DATA_OVERRIDES = {
-    "data.root": DATA_ROOT,
-    "data.name": SYNTHETIC_DATA,
-    "data.dt_scale": 1,  # the synthetic data is already 6-hourly
-    "data.train_start_year": 2016,
-    "data.valid_years": "[2017]",
-    "data.test_years": "[2018]",
-    "exp_root": EXP_ROOT,
-    "logging.log_to_wandb": False,
-}
 
-# Hydra overrides for the real ERA5 time subset (scripts/subset_era5.py): 0.25 degree, 6-hourly,
-# Jan-Apr 2016 for training and 5 days of 2017 for validation
-REAL_DATA = "latlon_025deg_hdf5_6h_subset"
-REAL_DATA_OVERRIDES = {
-    "data.root": DATA_ROOT,
-    "data.name": REAL_DATA,
-    "data.dt_scale": 1,  # the subset is 6-hourly: keeps the 6-hour lead time
-    "data.train_start_year": 2016,
-    "data.valid_years": "[2017]",
-    "data.test_years": "[2017]",
-    "exp_root": EXP_ROOT,
-    "logging.log_to_wandb": False,
-}
+def select_system(name):
+    """Set QUEUE, DATA_ROOT, EXP_ROOT and the data overrides for a system in SYSTEMS"""
+    global SYSTEM, QUEUE, DATA_ROOT, EXP_ROOT, SYNTHETIC_DATA_OVERRIDES, REAL_DATA_OVERRIDES
+    if name not in SYSTEMS:
+        raise ValueError(f"Unknown system {name!r}; choose from {sorted(SYSTEMS)}")
+    SYSTEM = name
+    QUEUE = SYSTEMS[name]["queue"]
+    DATA_ROOT = SYSTEMS[name]["data_root"]
+    EXP_ROOT = SYSTEMS[name]["exp_root"]
+    # Hydra overrides that point training at the synthetic test data
+    SYNTHETIC_DATA_OVERRIDES = {
+        "data.root": DATA_ROOT,
+        "data.name": SYNTHETIC_DATA,
+        "data.dt_scale": 1,  # the synthetic data is already 6-hourly
+        "data.train_start_year": 2016,
+        "data.valid_years": "[2017]",
+        "data.test_years": "[2018]",
+        "exp_root": EXP_ROOT,
+        "logging.log_to_wandb": False,
+    }
+    # Hydra overrides for the real ERA5 subset
+    REAL_DATA_OVERRIDES = {
+        "data.root": DATA_ROOT,
+        "data.name": REAL_DATA,
+        "data.dt_scale": 1,  # the subset is 6-hourly: keeps the 6-hour lead time
+        "data.train_start_year": 2016,
+        "data.valid_years": "[2017]",
+        "data.test_years": "[2017]",
+        "exp_root": EXP_ROOT,
+        "logging.log_to_wandb": False,
+    }
+
+
+select_system(os.environ.get("SCALING_SYSTEM", "muller"))
+
+
+def add_system_args(parser):
+    """Add --system and --queue (default: the system's queue); call apply_system_args after parsing"""
+    parser.add_argument("--system", choices=sorted(SYSTEMS), default=SYSTEM,
+                        help="cluster; sets the default queue and the data and output paths "
+                             "(default: $SCALING_SYSTEM or muller)")
+    parser.add_argument("--queue", help="queue (default: the system's, e.g. perlmutter)")
+
+
+def apply_system_args(args):
+    select_system(args.system)
+    args.queue = args.queue or QUEUE
+
+
+def set_task_properties(task, qos=None, time=None):
+    """Slurm qos/time user properties (the templates' defaults apply when unset)"""
+    props = {k: v for k, v in (("qos", qos), ("time", time)) if v}
+    if props:
+        task.set_user_properties(**props)
+
 
 # The template exports Slurm's rank variables; the image's NCCL net plugin
 # setting does not apply inside podman-hpc (submit_batch.sh unsets it too).
