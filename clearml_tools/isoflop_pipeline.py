@@ -164,6 +164,8 @@ def build_pipeline(plan, args):
     )
 
     data_overrides = {**args.data_overrides, "data.limit_nsamples": args.limit_nsamples}
+    # Slurm qos/time for every step, as task properties; unset ones keep the template defaults
+    slurm = {f"properties/{k}": str(v) for k, v in (("qos", args.qos), ("time", args.time)) if v}
     cooldown_steps = []
     for run in plan:
         pipe.add_step(
@@ -172,6 +174,7 @@ def build_pipeline(plan, args):
             parameter_override={
                 **common.hydra_params({**data_overrides, **run["params"]}),
                 "properties/num_nodes": str(run["nodes"]),
+                **slurm,
             },
             cache_executed_step=False,
         )
@@ -183,6 +186,7 @@ def build_pipeline(plan, args):
                 parameter_override={
                     **common.hydra_params({**data_overrides, **c["params"]}),
                     "properties/num_nodes": str(run["nodes"]),
+                    **slurm,
                 },
                 cache_executed_step=False,
             )
@@ -192,6 +196,7 @@ def build_pipeline(plan, args):
         name="isoflop-analysis",
         parents=cooldown_steps,
         base_task_id=analysis.id,
+        parameter_override=slurm,
         cache_executed_step=False,
     )
     return pipe
@@ -219,6 +224,8 @@ def main():
     parser.add_argument("--micro-batch-size", type=int,
                         help="per-GPU micro-batch (default: no accumulation on synthetic data, 2 on real data, "
                         "which fits e256-d8 on Muller's 40 GB A100s)")
+    parser.add_argument("--qos", help="Slurm QOS for every step, e.g. debug (default: the template's)")
+    parser.add_argument("--time", help="Slurm time limit per step, e.g. 10 or 2:00:00 (default: the template's)")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = parser.parse_args()
     common.apply_system_args(args)
@@ -239,6 +246,7 @@ def main():
         micro_batch_size=args.micro_batch_size,
     )
     print_plan(plan)
+    print(f"system {common.SYSTEM}, queue {args.queue}, qos {args.qos or 'default'}, time {args.time or 'default'}")
     if args.dry_run:
         print(json.dumps(plan, indent=1, default=str)[:3000])
         return
