@@ -22,7 +22,7 @@ REPO = "https://github.com/sparticlesteve/neural-scaling-weather.git"
 BRANCH = "clearml-scaling"
 IMAGE = "docker.io/nersc/pytorch:26.07.01"
 PROJECT = "SC26 demo-dev/Scaling laws"
-TAGS = ["sc26-test", "scaling"]
+TAGS = []  # no default tags; submit_train.py --tags adds some
 
 SYSTEMS = {
     "muller": {
